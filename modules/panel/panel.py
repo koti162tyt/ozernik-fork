@@ -8,7 +8,7 @@ from typing_extensions import Literal
 
 from config import config
 
-LOG_CHANNEL = 1131880136053100616
+LOG_CHANNEL = 1514227855729627238
 
 ALLOWED_ROLES = [725675581881974794, # admin role main server
                  1408776412177109142, 
