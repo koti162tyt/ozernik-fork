@@ -10,7 +10,7 @@ from config import config
 
 LOG_CHANNEL = 1514227855729627238
 
-ALLOWED_ROLES = [725675581881974794, # admin role main server
+ALLOWED_ROLES = [1513934749830221904, # admin role main server 
                  1408776412177109142, 
                  1284568196673830924, 
                  779015800555176006,
