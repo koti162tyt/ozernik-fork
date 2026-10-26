@@ -1,0 +1,88 @@
+{
+    "log_channel_id": 0,
+    "karma_message_delay": 1,
+    "karma_voice_delay": 1,
+    "karma_channel_id": 0,
+    "blocked_channels_id": [],
+    "blocked_users_id": [],
+    "blocked_roles_id": [],
+    "required_cubes": 10,
+    "karma_roles": {
+        "naraka": {
+            "name": "Нарака",
+            "role_id": 0,
+            "required_karma": 0,
+            "tag_name": "naraka",
+            "color": "#d47b33"
+        },
+        "preta": {
+            "name": "Прета",
+            "role_id": 0,
+            "required_karma": 100,
+            "tag_name": "preta",
+            "color": "#eb3434"
+        },
+        "animal": {
+            "name": "Зверь",
+            "role_id": 0,
+            "required_karma": 1000,
+            "tag_name": "animal",
+            "color": "#405ee4"
+        },
+        "human": {
+            "name": "Человек",
+            "role_id": 0,
+            "required_karma": 5000,
+            "tag_name": "human",
+            "color": "#c1f7f7"
+        },
+        "asur": {
+            "name": "Асур",
+            "role_id": 0,
+            "required_karma": null,
+            "tag_name": "asur",
+            "color": "#bf0895"
+        },
+        "deva": {
+            "name": "Дэва",
+            "role_id": 0,
+            "required_karma": null,
+            "tag_name": "deva",
+            "color": "#FDD439"
+        }
+    },
+    "cube_roles": {
+        "black_cube": {
+            "name": "Черный Куб",
+            "color": "#0D0D0D",
+            "role_id": 0,
+            "required_karma": 0,
+            "tag_name": "black_cube",
+            "place": 1
+        },
+        "white_cube": {
+            "name": "Белый Куб",
+            "color": "#E7E7E7",
+            "role_id": 0,
+            "required_karma": 360,
+            "tag_name": "white_cube",
+            "place": 2
+        },
+        "blue_cube": {
+            "name": "Синий Куб",
+            "color": "#4b69d4",
+            "role_id": 0,
+            "required_karma": 1440,
+            "tag_name": "blue_cube",
+            "place": 3
+        },
+        "gold_cube": {
+            "name": "Золотой Куб",
+            "color": "#FFAB33",
+            "role_id": 0,
+            "required_karma": 5760,
+            "tag_name": "gold_cube",
+            "place": 4
+        }
+    }
+}

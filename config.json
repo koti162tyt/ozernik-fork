@@ -1,0 +1,18 @@
+{
+    "GUILD_ID": 1324396791965417513,
+    "OWNERS_IDS": [
+        512079329619083291,
+        436586208450052099
+    ],
+    "ADMIN_ROLES_IDS": [],
+    "MODULES": {
+        "modules.bridge.bridge": true,
+        "modules.bridge.bridge_main": true,
+        "modules.cold_old_man.cold_old_man": true,
+        "modules.fame.fame": true,
+        "modules.karma_sistem.karma_sistem": true,
+        "modules.panel.panel": true,
+        "modules.rsn.rsn": true,
+        "modules.voice_manager.voicemanager": true
+    }
+}
