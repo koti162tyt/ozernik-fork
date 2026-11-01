@@ -757,10 +757,12 @@ class Bridge(commands.Cog):
 
             if for_telegram:
                 # Для Telegram — настоящая ссылка средствами HTML.
+                # Голый URL в цитату не ставим: в чате он виден как текст
+                # и превращается в мусор из слэшей.
                 if reply_text:
                     reply_body = f'<a href="{reply_mention}">{html.escape(reply_text)}</a>'
                 else:
-                    reply_body = reply_mention
+                    reply_body = '<i>(вложение)</i>'
             elif reply_text:
                 reply_body = f'[{reply_text}]({reply_mention})'
             else:
@@ -1631,7 +1633,18 @@ class Telegram:
             chat_link_id=source_link.id,
         )
 
-        if source_row is None or not source_row.discord_message_id:
+        if source_row is None:
+            print(
+                f'[bridge] reply: нет записи о сообщении {replied.message_id} '
+                f'в чате {source_link.telegram_chat_id} — ответ уйдёт цитатой.'
+            )
+            return None
+
+        if not source_row.discord_message_id:
+            print(
+                f'[bridge] reply: у сообщения {replied.message_id} пустой '
+                f'discord_message_id — сопоставить копию нельзя.'
+            )
             return None
 
         target_message_id = self.cog.db.get_peer_telegram_message_id(
@@ -1640,6 +1653,11 @@ class Telegram:
         )
 
         if target_message_id is None:
+            print(
+                f'[bridge] reply: в чате {target_link.telegram_chat_id} нет копии '
+                f'сообщения (discord_message_id={source_row.discord_message_id}) — '
+                f'ответ уйдёт цитатой.'
+            )
             return None
 
         return telegram.ReplyParameters(
@@ -1843,19 +1861,28 @@ class Telegram:
 
             reply_parameters = None
             if message.reference and message.reference.message_id:
-                reply = self.cog.db.get_message_link(message.reference.message_id, 'discord')
-                if reply:
+                # Копия ищется в целевом чате: у одного сообщения в каждом
+                # TG-чате свой message_id.
+                tg_reply_id = self.cog.db.get_peer_telegram_message_id(
+                    link_chat_id=chat_link.id,
+                    discord_message_id=message.reference.message_id,
+                )
+
+                if tg_reply_id:
                     common_kwargs = {
-                        'message_id': reply.telegram_message_id,
-                        'chat_id': reply.chat_link.telegram_chat_id,
+                        'message_id': tg_reply_id,
+                        'chat_id': chat_link.telegram_chat_id,
                         'allow_sending_without_reply': True
                     }
 
-                    if (reply.telegram_message_id, chat_link.telegram_chat_id, chat_link.telegram_topic_id) in self.entities:
+                    reply = self.cog.db.get_message_link(message.reference.message_id, 'discord')
+
+                    if reply and (tg_reply_id, chat_link.telegram_chat_id,
+                                  chat_link.telegram_topic_id) in self.entities:
                         common_kwargs.update({
                             'quote': reply.text,
                             'quote_entities': self.entities[
-                                reply.telegram_message_id,
+                                tg_reply_id,
                                 chat_link.telegram_chat_id,
                                 chat_link.telegram_topic_id
                             ]
@@ -1919,20 +1946,28 @@ class Telegram:
 
             reply_parameters = None
             if message.reference and message.reference.message_id:
-                reply = self.cog.db.get_message_link(message.reference.message_id, 'discord')
-                if reply:
+                # Копия ищется в целевом чате: у одного сообщения в каждом
+                # TG-чате свой message_id.
+                tg_reply_id = self.cog.db.get_peer_telegram_message_id(
+                    link_chat_id=chat_link.id,
+                    discord_message_id=message.reference.message_id,
+                )
+
+                if tg_reply_id:
                     common_kwargs = {
-                        'message_id': reply.telegram_message_id,
-                        'chat_id': reply.chat_link.telegram_chat_id,
+                        'message_id': tg_reply_id,
+                        'chat_id': chat_link.telegram_chat_id,
                         'allow_sending_without_reply': True
                     }
 
-                    if (reply.telegram_message_id, chat_link.telegram_chat_id,
-                        chat_link.telegram_topic_id) in self.entities:
+                    reply = self.cog.db.get_message_link(message.reference.message_id, 'discord')
+
+                    if reply and (tg_reply_id, chat_link.telegram_chat_id,
+                                  chat_link.telegram_topic_id) in self.entities:
                         common_kwargs.update({
                             'quote': reply.text,
                             'quote_entities': self.entities[
-                                reply.telegram_message_id,
+                                tg_reply_id,
                                 chat_link.telegram_chat_id,
                                 chat_link.telegram_topic_id
                             ]
