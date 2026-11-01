@@ -1,5 +1,5 @@
 {
-    "GUILD_ID": 1513563336904544256,
+    "GUILD_ID": 1324396791965417513,
     "OWNERS_IDS": [
         787331771255357450,
         436586208450052099
@@ -7,7 +7,7 @@
     "ADMIN_ROLES_IDS": [],
     "MODULES": {
         "modules.bridge.bridge": true,
-        "modules.bridge.bridge_main": true,
+        "modules.bridge.bridge_main": false,
         "modules.cold_old_man.cold_old_man": true,
         "modules.fame.fame": true,
         "modules.karma_sistem.karma_sistem": true,

@@ -20,6 +20,7 @@ playwright>=1.58
 propcache
 pyee
 pylottie
+python-dotenv
 python-telegram-bot>=20
 typing_extensions
 yarl

@@ -8,9 +8,30 @@ from utilities import DataWorker
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config.json"
+ENV_PATH = BASE_DIR / ".env"
 
 
-# ---------- ТОКЕНЫ (только из окружения) ----------
+# ---------- .env (для локального запуска) ----------
+# На Render переменные задаются в панели Environment, поэтому .env там не нужен.
+# Локально же без этой подгрузки .env полностью игнорировался и бот падал с RuntimeError.
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # python-dotenv не установлен
+    load_dotenv = None  # type: ignore[assignment]
+
+if ENV_PATH.exists():
+    if load_dotenv is None:
+        print(
+            "[config] Рядом лежит .env, но пакет python-dotenv не установлен — файл игнорируется. "
+            "Установи: pip install python-dotenv"
+        )
+    else:
+        load_dotenv(ENV_PATH)
+        print(f"[config] Переменные окружения подгружены из {ENV_PATH.name}")
+
+
+# ---------- ТОКЕНЫ (из окружения) ----------
 
 DISCORD_TOKEN_MAIN = os.getenv("DISCORD_TOKEN_MAIN")
 TELEGRAM_TOKEN_MAIN = os.getenv("TELEGRAM_TOKEN_MAIN")
