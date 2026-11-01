@@ -3178,7 +3178,22 @@ class KarmaSistem(commands.Cog):
         try:
             if not self.bot.ready:
                 return
-            for channel in self.bot.guild.voice_channels:
+
+            guild = self.bot.guild
+
+            if guild is None:
+                # Бот не видит сервер GUILD_ID: без этой проверки задача падала
+                # с AttributeError каждую минуту и забивала лог.
+                if not getattr(self, '_guild_warned', False):
+                    self._guild_warned = True
+                    print(
+                        '[karma_sistem] Бот не видит сервер (bot.guild is None) — '
+                        'проверка голосовой кармы пропущена. Проверь GUILD_ID в config.json '
+                        'и что бот приглашён на этот сервер со scope "bot applications.commands".'
+                    )
+                return
+
+            for channel in guild.voice_channels:
                 members = channel.members
 
                 if not members:

@@ -201,16 +201,20 @@ class ViewSelectForum(View):
             self.channel = channel
 
             for forum in cog.telegram.available_forums:
-                self.options.append(SelectOption(label=forum.title, value=forum.id))
+                self.options.append(SelectOption(label=forum.title, value=str(forum.id)))
 
         async def callback(self, select_interaction: discord.Interaction):
             try:
+                # Подтверждаем интеракцию сразу, иначе Discord покажет "Ошибка взаимодействия".
+                if not select_interaction.response.is_done():
+                    await select_interaction.response.defer(ephemeral=True)
+
                 forum_id = int(self.values[0])
 
                 success, mess = await self.cog.telegram.check_bots_exist(forum_id)
 
                 if not success:
-                    await select_interaction.channel.send(f'```{mess}```')
+                    await select_interaction.followup.send(f'```{mess}```', ephemeral=True)
                     return
 
                 topic: telegram.ForumTopic = await self.cog.telegram.app_main._bot.create_forum_topic(
@@ -225,17 +229,21 @@ class ViewSelectForum(View):
                         telegram_topic_id=topic.message_thread_id
                     )
                 except sqlite3.IntegrityError:
-                    await select_interaction.channel.send(
+                    await select_interaction.followup.send(
                         'Этот форум-топик уже привязан к Discord-каналу. '
-                        'Удалите старую привязку через `/bridge_list_links` и попробуйте снова.'
+                        'Удалите старую привязку через `/bridge_list_links` и попробуйте снова.',
+                        ephemeral=True
                     )
                     return
 
-                await select_interaction.channel.send(f'Мост в {self.channel.mention} зарегистрирован.')
+                await select_interaction.followup.send(f'Мост в {self.channel.mention} зарегистрирован.')
                 await select_interaction.message.delete(delay=0)
 
             except Exception as _e:
-                await select_interaction.channel.send(f'```{_e}```')
+                try:
+                    await select_interaction.followup.send(f'```{_e}```', ephemeral=True)
+                except Exception:
+                    await select_interaction.channel.send(f'```{_e}```')
 
         async def interaction_check(self, check_interaction: discord.Interaction) -> bool:
             if check_interaction.user != self.user:
@@ -257,16 +265,20 @@ class ViewSelectGroup(View):
             self.channel = channel
 
             for group in cog.telegram.available_groups:
-                self.options.append(SelectOption(label=group.title, value=group.id))
+                self.options.append(SelectOption(label=group.title, value=str(group.id)))
 
         async def callback(self, select_interaction: discord.Interaction):
             try:
+                # Подтверждаем интеракцию сразу, иначе Discord покажет "Ошибка взаимодействия".
+                if not select_interaction.response.is_done():
+                    await select_interaction.response.defer(ephemeral=True)
+
                 group_id = int(self.values[0])
 
                 success, mess = await self.cog.telegram.check_bots_exist(group_id, False)
 
                 if not success:
-                    await select_interaction.channel.send(f'```{mess}```')
+                    await select_interaction.followup.send(f'```{mess}```', ephemeral=True)
                     return
 
                 try:
@@ -275,17 +287,21 @@ class ViewSelectGroup(View):
                         telegram_chat_id=group_id
                     )
                 except sqlite3.IntegrityError:
-                    await select_interaction.channel.send(
+                    await select_interaction.followup.send(
                         'Эта Telegram-группа уже привязана к другому Discord-каналу. '
-                        'Удалите старую привязку через `/bridge_list_links` и попробуйте снова.'
+                        'Удалите старую привязку через `/bridge_list_links` и попробуйте снова.',
+                        ephemeral=True
                     )
                     return
 
-                await select_interaction.channel.send(f'Мост в {self.channel.mention} зарегистрирован.')
+                await select_interaction.followup.send(f'Мост в {self.channel.mention} зарегистрирован.')
                 await select_interaction.message.delete(delay=0)
 
             except Exception as _e:
-                await select_interaction.channel.send(f'```{_e}```')
+                try:
+                    await select_interaction.followup.send(f'```{_e}```', ephemeral=True)
+                except Exception:
+                    await select_interaction.channel.send(f'```{_e}```')
 
         async def interaction_check(self, check_interaction: discord.Interaction) -> bool:
             if check_interaction.user != self.user:
@@ -307,23 +323,27 @@ class ViewSelectChannel(View):
             self.channel = channel
 
             for tg_channel in cog.telegram.available_channels:
-                self.options.append(SelectOption(label=tg_channel.title, value=tg_channel.id))
+                self.options.append(SelectOption(label=tg_channel.title, value=str(tg_channel.id)))
 
         async def callback(self, select_interaction: discord.Interaction):
             try:
+                # Подтверждаем интеракцию сразу, иначе Discord покажет "Ошибка взаимодействия".
+                if not select_interaction.response.is_done():
+                    await select_interaction.response.defer(ephemeral=True)
+
                 tg = self.cog.telegram
                 tg_channel_id = int(self.values[0])
 
                 success, mess = await tg.check_bots_exist(tg_channel_id, False)
 
                 if not success:
-                    await select_interaction.channel.send(f'```{mess}```')
+                    await select_interaction.followup.send(f'```{mess}```', ephemeral=True)
                     return
 
                 success, mess = await tg.check_announce_linked_chat_bots_exist(tg_channel_id)
 
                 if not success:
-                    await select_interaction.channel.send(f'```{mess}```')
+                    await select_interaction.followup.send(f'```{mess}```', ephemeral=True)
                     return
 
                 try:
@@ -332,17 +352,21 @@ class ViewSelectChannel(View):
                         telegram_chat_id=tg_channel_id
                     )
                 except sqlite3.IntegrityError:
-                    await select_interaction.channel.send(
+                    await select_interaction.followup.send(
                         'Этот Telegram-канал уже привязан к другому Discord-каналу. '
-                        'Удалите старую привязку через `/bridge_list_links` и попробуйте снова.'
+                        'Удалите старую привязку через `/bridge_list_links` и попробуйте снова.',
+                        ephemeral=True
                     )
                     return
 
-                await select_interaction.channel.send(f'Мост в {self.channel.mention} зарегистрирован.')
+                await select_interaction.followup.send(f'Мост в {self.channel.mention} зарегистрирован.')
                 await select_interaction.message.delete(delay=0)
 
             except Exception as _e:
-                await select_interaction.channel.send(f'```{_e}```')
+                try:
+                    await select_interaction.followup.send(f'```{_e}```', ephemeral=True)
+                except Exception:
+                    await select_interaction.channel.send(f'```{_e}```')
 
         async def interaction_check(self, check_interaction: discord.Interaction) -> bool:
             if check_interaction.user != self.user:
@@ -423,6 +447,13 @@ class Bridge(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def bridge_create_thread(self, interaction: Interaction, channel: discord.TextChannel):
         try:
+            if self.telegram.app_main is None:
+                await interaction.response.send_message(
+                    'Telegram-часть моста не запущена, поэтому привязку создать нельзя. '
+                    'Смотри консоль/Render-логи: там будут строки об ошибке токенов или polling.',
+                    ephemeral=True)
+                return
+
             if not self.telegram.available_forums:
                 await interaction.response.send_message(
                     f'В оперативной памяти нет доступных telegram форумов. Добавьте `@{self.telegram.app_main.bot.username}` в чат форум и отправьте там любое сообщение.',
@@ -446,6 +477,13 @@ class Bridge(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def bridge_create_strong_link(self, interaction: Interaction, channel: discord.TextChannel):
         try:
+            if self.telegram.app_main is None:
+                await interaction.response.send_message(
+                    'Telegram-часть моста не запущена, поэтому привязку создать нельзя. '
+                    'Смотри консоль/Render-логи: там будут строки об ошибке токенов или polling.',
+                    ephemeral=True)
+                return
+
             if not self.telegram.available_groups:
                 await interaction.response.send_message(
                     f'В оперативной памяти нет доступных telegram групп. Добавьте `@{self.telegram.app_main.bot.username}` в группу и отправьте там любое сообщение.',
@@ -470,6 +508,13 @@ class Bridge(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def bridge_create_announcements_link(self, interaction: Interaction, channel: discord.TextChannel):
         try:
+            if self.telegram.app_main is None:
+                await interaction.response.send_message(
+                    'Telegram-часть моста не запущена, поэтому привязку создать нельзя. '
+                    'Смотри консоль/Render-логи: там будут строки об ошибке токенов или polling.',
+                    ephemeral=True)
+                return
+
             if not self.telegram.available_channels:
                 await interaction.response.send_message(
                     f'В оперативной памяти нет доступных telegram каналов/блогов. Добавьте `@{self.telegram.app_main.bot.username}` в группу и отправьте там любое сообщение.',
@@ -655,8 +700,13 @@ class Bridge(commands.Cog):
             return random_avatar(telegram_user_id)
 
     @staticmethod
-    def get_reply_ping(ds_message: discord.Message) -> str:
+    def get_reply_ping(ds_message: discord.Message, for_telegram: bool = False) -> str:
         try:
+            if for_telegram:
+                # В Telegram работает HTML, `**имя**` и `<@id>` там не разметка,
+                # а обычный текст (а `<@id>` ещё и ломает разбор HTML).
+                return f'<b>{html.escape(ds_message.author.display_name)}</b>'
+
             if not ds_message.webhook_id:
                 reply_ping = ds_message.author.mention
             else:
@@ -671,14 +721,14 @@ class Bridge(commands.Cog):
             text = text.replace('\n', ' ')
             text = text.replace('**', '')
 
-            if text.startswith('-# ') or text.startswith('## '):
-                text = text.replace('-# ', '', 1)
-            elif text.startswith('# '):
-                text = text.replace('# ', '', 1)
+            if text.startswith('### '):
+                text = text.replace('### ', '', 1)
             elif text.startswith('## '):
                 text = text.replace('## ', '', 1)
-            elif text.startswith('### '):
-                text = text.replace('### ', '', 1)
+            elif text.startswith('# '):
+                text = text.replace('# ', '', 1)
+            elif text.startswith('-# '):
+                text = text.replace('-# ', '', 1)
 
             text = text.replace('https://', '')
             text = text.replace('http://', '')
@@ -687,7 +737,8 @@ class Bridge(commands.Cog):
         except Exception as e:
             print(f"remove_unnecessary_markup error: {e}")
 
-    async def get_reply_body(self, ds_message: discord.Message) -> tuple[str, str]:
+    async def get_reply_body(self, ds_message: discord.Message,
+                             for_telegram: bool = False) -> tuple[str, str]:
         try:
             reply_text = ds_message.clean_content
 
@@ -704,14 +755,21 @@ class Bridge(commands.Cog):
 
             reply_mention = f'https://discord.com/channels/{ds_message.guild.id}/{ds_message.channel.id}/{ds_message.id}'
 
-            if reply_text:
+            if for_telegram:
+                # Для Telegram — настоящая ссылка средствами HTML.
+                if reply_text:
+                    reply_body = f'<a href="{reply_mention}">{html.escape(reply_text)}</a>'
+                else:
+                    reply_body = reply_mention
+            elif reply_text:
                 reply_body = f'[{reply_text}]({reply_mention})'
             else:
                 reply_body = f'{reply_mention}'
 
-            return tuple(reply_body, reply_mention)
+            return reply_body, reply_mention
         except Exception as e:
             print(f"get_reply_body error: {e}")
+            return '', ''
 
     @staticmethod
     def format_origin(message: telegram.Message, content: str) -> str:
@@ -771,7 +829,8 @@ class Bridge(commands.Cog):
 
         return 'Неизвестный пользователь'
 
-    async def get_content(self, message: telegram.Message, chat_link: DataTypes.ChatLink) -> tuple[str, str]:
+    async def get_content(self, message: telegram.Message, chat_link: DataTypes.ChatLink,
+                          for_telegram: bool = False) -> tuple[str, str]:
         try:
             content = message.text_markdown_v2 or message.caption_markdown_v2 or ''
 
@@ -798,9 +857,13 @@ class Bridge(commands.Cog):
                         ds_replied_message: discord.Message = await channel.fetch_message(
                             replied_message_link.discord_message_id)
 
-                        reply_ping = self.get_reply_ping(ds_replied_message)
-                        reply_body = await self.get_reply_body(ds_replied_message)
-                        reply_block = f'-# ┏  {reply_ping}╺╸**{reply_body}**\n'
+                        reply_ping = self.get_reply_ping(ds_replied_message, for_telegram=for_telegram)
+                        reply_body, _ = await self.get_reply_body(ds_replied_message, for_telegram=for_telegram)
+
+                        if for_telegram:
+                            reply_block = f'<i>┏  {reply_ping}╺╸{reply_body}</i>\n'
+                        else:
+                            reply_block = f'-# ┏  {reply_ping}╺╸**{reply_body}**\n'
                     else:
                         reply_block = f'-# ┏  **{message.reply_to_message.from_user.full_name}**╺╸**Неизвестное сообщение**\n'
 
@@ -920,6 +983,13 @@ class Telegram:
 
         self.chats: set[telegram.Chat] = set()
 
+        # Кэш известных чатов (id -> снимок). Telegram отдаёт каждый апдейт только
+        # одному поллеру, поэтому после рестарта/деплоя списки чатов оказывались
+        # пустыми, и привязку нельзя было создать, пока в группе снова не напишут
+        # сообщение. Теперь список восстанавливается с диска.
+        self._chats_cache: dict[int, dict] = {}
+        self._load_chats_cache()
+
         self.chat_locks = defaultdict(asyncio.Lock)
 
         self.attachments_index = 0
@@ -952,7 +1022,65 @@ class Telegram:
         else:
             return self.app_repeater2.bot, replace
 
-    def add_chat(self, chat: telegram.Chat):  # noqa
+    def get_sender_bot(self, chat_link: DataTypes.ChatLink, user_id: int) -> telegram.Bot:
+        """
+        Кем отправлять сообщение в чат: ретранслятором (как в Discord → TG),
+        а если ретрансляторы не запущены — главным ботом, чтобы не потерять сообщение.
+        """
+        repeaters_ready = all(
+            app is not None and getattr(app, 'running', False)
+            for app in (self.app_repeater1, self.app_repeater2)
+        )
+
+        if not repeaters_ready:
+            return self.app_main.bot
+
+        try:
+            bot, _ = self.get_repeater(chat_link, user_id)
+            return bot
+        except Exception as e:
+            print(f'get_sender_bot error: {e}')
+            return self.app_main.bot
+
+    # ---------- кэш известных telegram-чатов ----------
+
+    def _chat_to_cache(self, chat: telegram.Chat) -> dict:
+        return {
+            'id': chat.id,
+            'type': chat.type,
+            'title': chat.title,
+            'username': getattr(chat, 'username', None),
+            'is_forum': bool(getattr(chat, 'is_forum', False)),
+        }
+
+    def _chat_from_cache(self, item: dict) -> telegram.Chat | None:
+        if not item.get('id') or not item.get('type'):
+            return None
+
+        try:
+            return telegram.Chat(
+                id=item['id'],
+                type=item['type'],
+                title=item.get('title') or None,
+                is_forum=bool(item.get('is_forum', False)),
+            )
+        except TypeError:
+            # В части версий PTB is_forum не принимается конструктором.
+            try:
+                return telegram.Chat(
+                    id=item['id'],
+                    type=item['type'],
+                    title=item.get('title') or None,
+                )
+            except Exception as e:
+                print(f'[bridge] кэш чатов: не удалось восстановить {item!r}: {e}')
+                return None
+        except Exception as e:
+            print(f'[bridge] кэш чатов: не удалось восстановить {item!r}: {e}')
+            return None
+
+    def _remember_chat(self, chat: telegram.Chat) -> bool:
+        """Кладёт чат в списки. Возвращает True, если данные чата изменились."""
         self.chats.add(chat)
 
         if chat.is_forum:
@@ -963,6 +1091,46 @@ class Telegram:
 
         elif chat.type == 'channel':
             self.available_channels.add(chat)
+
+        snapshot = self._chat_to_cache(chat)
+        if self._chats_cache.get(chat.id) == snapshot:
+            return False
+
+        self._chats_cache[chat.id] = snapshot
+        return True
+
+    def _save_chats_cache(self) -> None:
+        try:
+            data.known_chats = list(self._chats_cache.values())
+        except Exception as e:
+            print(f'[bridge] не удалось сохранить кэш чатов: {e}')
+
+    def _load_chats_cache(self) -> None:
+        cached = data.known_chats or []
+        restored = 0
+
+        for item in cached:
+            try:
+                chat = self._chat_from_cache(item)
+            except Exception as e:
+                print(f'[bridge] кэш чатов: пропущена запись {item!r}: {e}')
+                continue
+
+            if chat is not None:
+                self._remember_chat(chat)
+                restored += 1
+
+        if restored:
+            print(
+                f'[bridge] из кэша восстановлено telegram-чатов: {restored} '
+                f'(групп: {len(self.available_groups)}, '
+                f'форумов: {len(self.available_forums)}, '
+                f'каналов: {len(self.available_channels)})'
+            )
+
+    def add_chat(self, chat: telegram.Chat):  # noqa
+        if self._remember_chat(chat):
+            self._save_chats_cache()
 
     def add_entities(self, message: telegram.Message):
         self.entities[(message.id, message.chat.id, message.message_thread_id)] = message.entities or message.caption_entities
@@ -1025,7 +1193,7 @@ class Telegram:
             if main_bot.status not in ['administrator', 'creator']:
                 return False, f"Главный бот должен быть администратором."
 
-            if getattr(main_bot, 'can_manage_topics', False) and check_can_manage_topics:
+            if check_can_manage_topics and not getattr(main_bot, 'can_manage_topics', False):
                 return False, f"У главного бота нет прав на управление темами (форумом)."
 
             try:
@@ -1422,6 +1590,47 @@ class Telegram:
         except Exception as e:
             print('get_file error: ', e)
 
+    def get_tg_reply_parameters(
+            self,
+            message: telegram.Message,
+            source_link: DataTypes.ChatLink,
+            target_link: DataTypes.ChatLink,
+    ) -> telegram.ReplyParameters | None:
+        """
+        Ищет в целевом TG-чате копию сообщения, на которое ответили в исходном чате.
+
+        Строка (source_link, reply_id) даёт общий discord_message_id, а по нему в
+        target_link находится копия — на неё и оформляется настоящий ответ.
+        Если копия не найдена (сообщение писали до запуска моста), возвращается None
+        и остаётся прежняя текстовая цитата.
+        """
+        replied = message.reply_to_message
+
+        if replied is None or replied.forum_topic_created is not None:
+            return None
+
+        source_row = self.cog.db.get_message_link(
+            message_id=replied.message_id,
+            mess_type='telegram',
+            chat_link_id=source_link.id,
+        )
+
+        if source_row is None or not source_row.discord_message_id:
+            return None
+
+        target_message_id = self.cog.db.get_peer_telegram_message_id(
+            link_chat_id=target_link.id,
+            discord_message_id=source_row.discord_message_id,
+        )
+
+        if target_message_id is None:
+            return None
+
+        return telegram.ReplyParameters(
+            message_id=target_message_id,
+            allow_sending_without_reply=True,
+        )
+
     async def send_telegram_to_telegram(
             self,
             source_link: DataTypes.ChatLink,
@@ -1435,12 +1644,20 @@ class Telegram:
             return
 
         tg_message = tg_messages[0]
-        bot = self.app_main.bot
-
-        content, reply_block = await self.cog.get_content(tg_message, source_link)
-        text = reply_block + content
-
         sender = tg_message.from_user
+
+        # Пишем через ретрансляторов, как и в направлении Discord → TG:
+        # иначе в peer-чате все сообщения идут только от главного бота.
+        bot = self.get_sender_bot(target_link, sender.id if sender is not None else 0)
+
+        content, reply_block = await self.cog.get_content(tg_message, source_link, for_telegram=True)
+
+        # Настоящий ответ на копию сообщения в целевом чате. Если копия не найдена —
+        # остаётся текстовая цитата, и тогда её не дублируем.
+        reply_parameters = self.get_tg_reply_parameters(tg_message, source_link, target_link)
+
+        text = content if reply_parameters else reply_block + content
+
         if sender is not None:
             display_name = sender.full_name
             ozernik = self.cog.db.get_user_by_telegram_id(sender.id)
@@ -1479,6 +1696,7 @@ class Telegram:
                 text=text,
                 parse_mode='HTML',
                 delete_after=True,
+                reply_parameters=reply_parameters,
             )
         else:
             msg = await bot.send_message(
@@ -1487,6 +1705,7 @@ class Telegram:
                 text=text,
                 parse_mode='HTML',
                 disable_web_page_preview=True,
+                reply_parameters=reply_parameters,
             )
             sent = [msg]
 
@@ -1767,6 +1986,39 @@ class Telegram:
         )
 
     async def start(self):
+        tokens = {
+            'TELEGRAM_TOKEN_MAIN': TELEGRAM_TOKEN_MAIN,
+            'TELEGRAM_TOKEN_REPEATER_1': TELEGRAM_TOKEN_REPEATER_1,
+            'TELEGRAM_TOKEN_REPEATER_2': TELEGRAM_TOKEN_REPEATER_2,
+        }
+
+        duplicates = sorted(
+            name for name, token in tokens.items()
+            if list(tokens.values()).count(token) > 1
+        )
+
+        if duplicates:
+            print(
+                '[bridge] ОШИБКА: одинаковый токен Telegram используется несколькими '
+                f'ботами: {", ".join(duplicates)}.\n'
+                '         Telegram разрешает опрашивать токен только одному процессу, '
+                'поэтому мост работать не будет\n'
+                '         (Conflict: terminated by other getUpdates request). '
+                'Проверь переменные окружения / панель Render.'
+            )
+            return
+
+        print(
+            '[bridge] Поднимаю telegram-мост.\n'
+            '         Если в логе появится "Conflict: terminated by other getUpdates '
+            'request" — этот же токен опрашивает\n'
+            '         другой процесс: второй Render-сервис, старый деплой в момент '
+            'перезапуска или локальный запуск на ПК.\n'
+            '         Telegram отдаёт обновления только одному из них, поэтому группа '
+            'может не появляться в /bridge_create_strong_link.\n'
+            '         Останови лишний процесс и отправь сообщение в группу заново.'
+        )
+
         try:
             self.app_repeater1 = (
                 ApplicationBuilder().

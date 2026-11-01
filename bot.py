@@ -297,10 +297,86 @@ class OzernikiBot(commands.Bot):
 bot = OzernikiBot()
 
 
+@bot.command(name="sync")
+async def sync_commands(ctx: commands.Context) -> None:
+    """
+    Пересобирает и заново синхронизирует слэш-команды с сервером GUILD_ID.
+
+    Нужно, когда после смены GUILD_ID / переприглашения бота команды исчезли:
+    перезапуск для этого больше не обязателен. Работает как префикс-команда
+    (префикс "."), потому что префикс-команды не требуют регистрации в Discord.
+    """
+    is_owner = ctx.author.id in set(config.OWNERS_IDS or [])
+
+    is_admin = (
+        isinstance(ctx.author, discord.Member)
+        and ctx.author.guild_permissions.administrator
+    )
+
+    if not (is_owner or is_admin):
+        await ctx.reply("Только для владельцев бота или администраторов сервера.")
+        return
+
+    guild = discord.Object(id=GUILD_ID)
+    self_guild = bot.get_guild(GUILD_ID)
+
+    if self_guild is None:
+        print(
+            Fore.RED
+            + f"[sync] Бот не видит сервер {GUILD_ID} — синхронизация, скорее всего, "
+              f"упадёт с 403. Проверь GUILD_ID и приглашение бота."
+            + Style.RESET_ALL
+        )
+
+    bot.tree.copy_global_to(guild=guild)
+
+    try:
+        synced = await bot.tree.sync(guild=guild)
+
+    except discord.Forbidden as e:
+        await ctx.reply(
+            f"Не удалось синхронизировать команды для {GUILD_ID}: {e}\n"
+            f"Пригласи бота заново по ссылке со scope 'bot applications.commands':\n"
+            f"https://discord.com/api/oauth2/authorize"
+            f"?client_id={bot.application_id}&permissions=8&scope=bot%20applications.commands"
+        )
+
+    except Exception as e:
+        await ctx.reply(f"tree.sync failed: {e}")
+
+    else:
+        print(f"[sync] Синхронизировано команд: {len(synced)} (сервер {GUILD_ID}).")
+        await ctx.reply(
+            f"Синхронизировано команд: {len(synced)} (сервер {GUILD_ID}).\n"
+            f"Если команды всё равно не видны — проверь, что приглашён именно тот бот, "
+            f"чей токен в DISCORD_TOKEN_MAIN, и что в приглашении есть scope "
+            f"'applications.commands'."
+        )
+
+
 @bot.event
 async def on_ready() -> None:
     print(f"Login: {bot.user}")
     print(f"Timezone setup: {bot.moscow_tz}")
+
+    if bot.guild is None:
+        print(
+            Fore.RED
+            + f"[ERROR] Бот не видит сервер {GUILD_ID}: слэш-команды на нём "
+              f"зарегистрированы не будут, а модули вроде karma_sistem будут падать.\n"
+              f"        Проверь ID сервера и что бот приглашён именно на него "
+              f"со scope 'bot applications.commands'.\n"
+              f"        GUILD_ID берётся из config.json, а если файла нет — "
+              f"из CONFIG_TEMPLATE в config.py (config.json лежит в .gitignore)."
+            + Style.RESET_ALL
+        )
+    else:
+        print(
+            Fore.GREEN
+            + f"[INFO] Сервер: {bot.guild.name} ({bot.guild.id})"
+            + Style.RESET_ALL
+        )
+
     print("Ready!")
     bot.ready = True
 
