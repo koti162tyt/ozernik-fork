@@ -700,8 +700,13 @@ class Bridge(commands.Cog):
             return random_avatar(telegram_user_id)
 
     @staticmethod
-    def get_reply_ping(ds_message: discord.Message) -> str:
+    def get_reply_ping(ds_message: discord.Message, for_telegram: bool = False) -> str:
         try:
+            if for_telegram:
+                # В Telegram работает HTML, `**имя**` и `<@id>` там не разметка,
+                # а обычный текст (а `<@id>` ещё и ломает разбор HTML).
+                return f'<b>{html.escape(ds_message.author.display_name)}</b>'
+
             if not ds_message.webhook_id:
                 reply_ping = ds_message.author.mention
             else:
@@ -732,7 +737,8 @@ class Bridge(commands.Cog):
         except Exception as e:
             print(f"remove_unnecessary_markup error: {e}")
 
-    async def get_reply_body(self, ds_message: discord.Message) -> tuple[str, str]:
+    async def get_reply_body(self, ds_message: discord.Message,
+                             for_telegram: bool = False) -> tuple[str, str]:
         try:
             reply_text = ds_message.clean_content
 
@@ -749,17 +755,24 @@ class Bridge(commands.Cog):
 
             reply_mention = f'https://discord.com/channels/{ds_message.guild.id}/{ds_message.channel.id}/{ds_message.id}'
 
-            if reply_text:
+            if for_telegram:
+                # Для Telegram — настоящая ссылка средствами HTML.
+                if reply_text:
+                    reply_body = f'<a href="{reply_mention}">{html.escape(reply_text)}</a>'
+                else:
+                    reply_body = reply_mention
+            elif reply_text:
                 reply_body = f'[{reply_text}]({reply_mention})'
             else:
                 reply_body = f'{reply_mention}'
 
-            return tuple(reply_body, reply_mention)
+            return reply_body, reply_mention
         except Exception as e:
             print(f"get_reply_body error: {e}")
+            return '', ''
 
     @staticmethod
-    def format_origin(message: telegram.Message, content: str) -> str:
+    def format_origin(message: telegram.Message, content: str, for_telegram: bool = False) -> str:
         try:
             origin = message.forward_origin
 
@@ -776,6 +789,16 @@ class Bridge(commands.Cog):
 
                 case "channel":
                     title = origin.chat.title
+
+            if for_telegram:
+                # `> ###`, `-#` — разметка Discord, в Telegram HTML она не работает
+                # и видна как текст, поэтому для TG собираем blockquote.
+                return (
+                    '<blockquote>'
+                    f'<i>↪ Переслано</i>\n{content}\n'
+                    f'<i>{html.escape(title or "Неизвестно")}</i>'
+                    '</blockquote>'
+                )
 
             content = content.replace('\n', '\n> ### ')
 
@@ -816,9 +839,16 @@ class Bridge(commands.Cog):
 
         return 'Неизвестный пользователь'
 
-    async def get_content(self, message: telegram.Message, chat_link: DataTypes.ChatLink) -> tuple[str, str]:
+    async def get_content(self, message: telegram.Message, chat_link: DataTypes.ChatLink,
+                          for_telegram: bool = False) -> tuple[str, str]:
         try:
-            content = message.text_markdown_v2 or message.caption_markdown_v2 or ''
+            if for_telegram:
+                # В Telegram отправляем с parse_mode='HTML', поэтому берём HTML-версию.
+                # text_markdown_v2 — это исходник MarkdownV2: в HTML-режиме он виден
+                # сырым текстом (\[ \] \( \) \_ и ссылки [текст](https://...)).
+                content = message.text_html or message.caption_html or ''
+            else:
+                content = message.text_markdown_v2 or message.caption_markdown_v2 or ''
 
             content = re.sub(r"@everyone", r"@evеryone", content)
             content = re.sub(r"@here", r"@hеre", content)
@@ -826,7 +856,7 @@ class Bridge(commands.Cog):
             reply_block = ''
 
             if message.forward_origin:
-                content = self.format_origin(message, content)
+                content = self.format_origin(message, content, for_telegram=for_telegram)
 
             if message.reply_to_message is not None:
                 tg_replied_message = message.reply_to_message
@@ -843,9 +873,13 @@ class Bridge(commands.Cog):
                         ds_replied_message: discord.Message = await channel.fetch_message(
                             replied_message_link.discord_message_id)
 
-                        reply_ping = self.get_reply_ping(ds_replied_message)
-                        reply_body, _ = await self.get_reply_body(ds_replied_message)
-                        reply_block = f'-# ┏  {reply_ping}╺╸**{reply_body}**\n'
+                        reply_ping = self.get_reply_ping(ds_replied_message, for_telegram=for_telegram)
+                        reply_body, _ = await self.get_reply_body(ds_replied_message, for_telegram=for_telegram)
+
+                        if for_telegram:
+                            reply_block = f'<i>┏  {reply_ping}╺╸{reply_body}</i>\n'
+                        else:
+                            reply_block = f'-# ┏  {reply_ping}╺╸**{reply_body}**\n'
                     else:
                         reply_block = f'-# ┏  **{message.reply_to_message.from_user.full_name}**╺╸**Неизвестное сообщение**\n'
 
@@ -1003,6 +1037,26 @@ class Telegram:
             return self.app_repeater1.bot, replace
         else:
             return self.app_repeater2.bot, replace
+
+    def get_sender_bot(self, chat_link: DataTypes.ChatLink, user_id: int) -> telegram.Bot:
+        """
+        Кем отправлять сообщение в чат: ретранслятором (как в Discord → TG),
+        а если ретрансляторы не запущены — главным ботом, чтобы не потерять сообщение.
+        """
+        repeaters_ready = all(
+            app is not None and getattr(app, 'running', False)
+            for app in (self.app_repeater1, self.app_repeater2)
+        )
+
+        if not repeaters_ready:
+            return self.app_main.bot
+
+        try:
+            bot, _ = self.get_repeater(chat_link, user_id)
+            return bot
+        except Exception as e:
+            print(f'get_sender_bot error: {e}')
+            return self.app_main.bot
 
     # ---------- кэш известных telegram-чатов ----------
 
@@ -1606,9 +1660,13 @@ class Telegram:
             return
 
         tg_message = tg_messages[0]
-        bot = self.app_main.bot
+        sender = tg_message.from_user
 
-        content, reply_block = await self.cog.get_content(tg_message, source_link)
+        # Пишем через ретрансляторов, как и в направлении Discord → TG:
+        # иначе в peer-чате все сообщения идут только от главного бота.
+        bot = self.get_sender_bot(target_link, sender.id if sender is not None else 0)
+
+        content, reply_block = await self.cog.get_content(tg_message, source_link, for_telegram=True)
 
         # Настоящий ответ на копию сообщения в целевом чате. Если копия не найдена —
         # остаётся текстовая цитата, и тогда её не дублируем.
@@ -1616,7 +1674,6 @@ class Telegram:
 
         text = content if reply_parameters else reply_block + content
 
-        sender = tg_message.from_user
         if sender is not None:
             display_name = sender.full_name
             ozernik = self.cog.db.get_user_by_telegram_id(sender.id)
