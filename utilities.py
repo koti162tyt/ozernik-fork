@@ -1372,6 +1372,29 @@ class BridgeDatabase(Database):
 
         return DataTypes.MessageLink(row, chat_link)
 
+    def get_peer_telegram_message_id(self, link_chat_id: int,
+                                     discord_message_id: int) -> int | None:
+        """
+        ID сообщения в конкретном Telegram-чате связки по общему discord_message_id.
+
+        Копии одного и того же сообщения в разных TG-чатах связки пишутся с одним
+        и тем же discord_message_id, поэтому так находится копия для ответа.
+        """
+        if not discord_message_id:
+            return None
+
+        cur = self.execute("""
+            SELECT telegram_message_id
+            FROM messages
+            WHERE link_chat_id = ?
+              AND discord_message_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        """, (link_chat_id, discord_message_id))
+
+        row = cur.fetchone()
+        return row['telegram_message_id'] if row else None
+
 
 class Assets:
     def __init__(self, path: Path):

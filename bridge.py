@@ -965,6 +965,13 @@ class Telegram:
 
         self.chats: set[telegram.Chat] = set()
 
+        # Кэш известных чатов (id -> снимок). Telegram отдаёт каждый апдейт только
+        # одному поллеру, поэтому после рестарта/деплоя списки чатов оказывались
+        # пустыми, и привязку нельзя было создать, пока в группе снова не напишут
+        # сообщение. Теперь список восстанавливается с диска.
+        self._chats_cache: dict[int, dict] = {}
+        self._load_chats_cache()
+
         self.chat_locks = defaultdict(asyncio.Lock)
 
         self.attachments_index = 0
@@ -997,7 +1004,45 @@ class Telegram:
         else:
             return self.app_repeater2.bot, replace
 
-    def add_chat(self, chat: telegram.Chat):  # noqa
+    # ---------- кэш известных telegram-чатов ----------
+
+    def _chat_to_cache(self, chat: telegram.Chat) -> dict:
+        return {
+            'id': chat.id,
+            'type': chat.type,
+            'title': chat.title,
+            'username': getattr(chat, 'username', None),
+            'is_forum': bool(getattr(chat, 'is_forum', False)),
+        }
+
+    def _chat_from_cache(self, item: dict) -> telegram.Chat | None:
+        if not item.get('id') or not item.get('type'):
+            return None
+
+        try:
+            return telegram.Chat(
+                id=item['id'],
+                type=item['type'],
+                title=item.get('title') or None,
+                is_forum=bool(item.get('is_forum', False)),
+            )
+        except TypeError:
+            # В части версий PTB is_forum не принимается конструктором.
+            try:
+                return telegram.Chat(
+                    id=item['id'],
+                    type=item['type'],
+                    title=item.get('title') or None,
+                )
+            except Exception as e:
+                print(f'[bridge] кэш чатов: не удалось восстановить {item!r}: {e}')
+                return None
+        except Exception as e:
+            print(f'[bridge] кэш чатов: не удалось восстановить {item!r}: {e}')
+            return None
+
+    def _remember_chat(self, chat: telegram.Chat) -> bool:
+        """Кладёт чат в списки. Возвращает True, если данные чата изменились."""
         self.chats.add(chat)
 
         if chat.is_forum:
@@ -1008,6 +1053,46 @@ class Telegram:
 
         elif chat.type == 'channel':
             self.available_channels.add(chat)
+
+        snapshot = self._chat_to_cache(chat)
+        if self._chats_cache.get(chat.id) == snapshot:
+            return False
+
+        self._chats_cache[chat.id] = snapshot
+        return True
+
+    def _save_chats_cache(self) -> None:
+        try:
+            data.known_chats = list(self._chats_cache.values())
+        except Exception as e:
+            print(f'[bridge] не удалось сохранить кэш чатов: {e}')
+
+    def _load_chats_cache(self) -> None:
+        cached = data.known_chats or []
+        restored = 0
+
+        for item in cached:
+            try:
+                chat = self._chat_from_cache(item)
+            except Exception as e:
+                print(f'[bridge] кэш чатов: пропущена запись {item!r}: {e}')
+                continue
+
+            if chat is not None:
+                self._remember_chat(chat)
+                restored += 1
+
+        if restored:
+            print(
+                f'[bridge] из кэша восстановлено telegram-чатов: {restored} '
+                f'(групп: {len(self.available_groups)}, '
+                f'форумов: {len(self.available_forums)}, '
+                f'каналов: {len(self.available_channels)})'
+            )
+
+    def add_chat(self, chat: telegram.Chat):  # noqa
+        if self._remember_chat(chat):
+            self._save_chats_cache()
 
     def add_entities(self, message: telegram.Message):
         self.entities[(message.id, message.chat.id, message.message_thread_id)] = message.entities or message.caption_entities
@@ -1467,6 +1552,47 @@ class Telegram:
         except Exception as e:
             print('get_file error: ', e)
 
+    def get_tg_reply_parameters(
+            self,
+            message: telegram.Message,
+            source_link: DataTypes.ChatLink,
+            target_link: DataTypes.ChatLink,
+    ) -> telegram.ReplyParameters | None:
+        """
+        Ищет в целевом TG-чате копию сообщения, на которое ответили в исходном чате.
+
+        Строка (source_link, reply_id) даёт общий discord_message_id, а по нему в
+        target_link находится копия — на неё и оформляется настоящий ответ.
+        Если копия не найдена (сообщение писали до запуска моста), возвращается None
+        и остаётся прежняя текстовая цитата.
+        """
+        replied = message.reply_to_message
+
+        if replied is None or replied.forum_topic_created is not None:
+            return None
+
+        source_row = self.cog.db.get_message_link(
+            message_id=replied.message_id,
+            mess_type='telegram',
+            chat_link_id=source_link.id,
+        )
+
+        if source_row is None or not source_row.discord_message_id:
+            return None
+
+        target_message_id = self.cog.db.get_peer_telegram_message_id(
+            link_chat_id=target_link.id,
+            discord_message_id=source_row.discord_message_id,
+        )
+
+        if target_message_id is None:
+            return None
+
+        return telegram.ReplyParameters(
+            message_id=target_message_id,
+            allow_sending_without_reply=True,
+        )
+
     async def send_telegram_to_telegram(
             self,
             source_link: DataTypes.ChatLink,
@@ -1483,7 +1609,12 @@ class Telegram:
         bot = self.app_main.bot
 
         content, reply_block = await self.cog.get_content(tg_message, source_link)
-        text = reply_block + content
+
+        # Настоящий ответ на копию сообщения в целевом чате. Если копия не найдена —
+        # остаётся текстовая цитата, и тогда её не дублируем.
+        reply_parameters = self.get_tg_reply_parameters(tg_message, source_link, target_link)
+
+        text = content if reply_parameters else reply_block + content
 
         sender = tg_message.from_user
         if sender is not None:
@@ -1524,6 +1655,7 @@ class Telegram:
                 text=text,
                 parse_mode='HTML',
                 delete_after=True,
+                reply_parameters=reply_parameters,
             )
         else:
             msg = await bot.send_message(
@@ -1532,6 +1664,7 @@ class Telegram:
                 text=text,
                 parse_mode='HTML',
                 disable_web_page_preview=True,
+                reply_parameters=reply_parameters,
             )
             sent = [msg]
 
@@ -1812,6 +1945,39 @@ class Telegram:
         )
 
     async def start(self):
+        tokens = {
+            'TELEGRAM_TOKEN_MAIN': TELEGRAM_TOKEN_MAIN,
+            'TELEGRAM_TOKEN_REPEATER_1': TELEGRAM_TOKEN_REPEATER_1,
+            'TELEGRAM_TOKEN_REPEATER_2': TELEGRAM_TOKEN_REPEATER_2,
+        }
+
+        duplicates = sorted(
+            name for name, token in tokens.items()
+            if list(tokens.values()).count(token) > 1
+        )
+
+        if duplicates:
+            print(
+                '[bridge] ОШИБКА: одинаковый токен Telegram используется несколькими '
+                f'ботами: {", ".join(duplicates)}.\n'
+                '         Telegram разрешает опрашивать токен только одному процессу, '
+                'поэтому мост работать не будет\n'
+                '         (Conflict: terminated by other getUpdates request). '
+                'Проверь переменные окружения / панель Render.'
+            )
+            return
+
+        print(
+            '[bridge] Поднимаю telegram-мост.\n'
+            '         Если в логе появится "Conflict: terminated by other getUpdates '
+            'request" — этот же токен опрашивает\n'
+            '         другой процесс: второй Render-сервис, старый деплой в момент '
+            'перезапуска или локальный запуск на ПК.\n'
+            '         Telegram отдаёт обновления только одному из них, поэтому группа '
+            'может не появляться в /bridge_create_strong_link.\n'
+            '         Останови лишний процесс и отправь сообщение в группу заново.'
+        )
+
         try:
             self.app_repeater1 = (
                 ApplicationBuilder().
